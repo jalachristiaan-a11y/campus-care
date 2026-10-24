@@ -1,3 +1,4 @@
+
 * {
   margin: 0;
   padding: 0;
@@ -402,27 +403,6 @@ body {
 }
 
 .site-header h1 { position: relative; margin: 0; color: #fff9ed; font: 600 42px/1 'Lora', Georgia, serif; }
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: inherit;
-  text-decoration: none;
-  font-size: 15px;
-  line-height: 1.1;
-  font-weight: 700;
-  letter-spacing: 1.1px;
-}
-
-.brand-light { color: #e7b65b; }
-.brand small { display: block; margin-top: 6px; color: #b7c8b4; font-size: 9px; letter-spacing: 1.5px; }
-.brand-mark { position: relative; width: 34px; height: 34px; border: 2px solid #f8f5e9; border-radius: 50%; background: linear-gradient(#e7b65b 0 46%, #f8f5e9 46% 54%, #f8f5e9 54%); }
-.brand-mark::before { position: absolute; top: 13px; left: -2px; width: 34px; height: 4px; background: #23483a; content: ''; }
-.brand-mark span { position: absolute; top: 9px; left: 9px; width: 12px; height: 12px; border: 3px solid #23483a; border-radius: 50%; background: #f8f5e9; z-index: 1; }
-.header-note { color: #d3ddce; font: italic 15px 'Source Sans 3', sans-serif; }
-.api-link { color: #f8f5e9; font-size: 10px; letter-spacing: 1px; text-decoration: none; }
-.api-link span { margin-left: 5px; color: #e7b65b; }
 
 .catalogue { width: min(1200px, 90vw); margin: 0 auto; padding: 30px 0 48px; }
 .intro-row { display: flex; align-items: start; justify-content: space-between; gap: 40px; padding-bottom: 38px; }

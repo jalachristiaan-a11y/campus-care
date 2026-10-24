@@ -1,241 +1,366 @@
-import { useEffect, useState } from 'react'
-import './App.css'
+﻿import { useEffect, useState } from 'react';
+import {
+  Eye,
+  EyeOff,
+  GraduationCap,
+  Building2,
+  CheckCircle2,
+} from 'lucide-react';
+import Register from './Register.jsx';
+import Dashboard from './Dashboard.jsx';
+import SubmitGrievance from './SubmitGrievance.jsx';
+import { getGrievances, saveGrievance } from './grievanceStore.js';
 
-const PAGE_SIZE = 12
-const TYPES = ['all', 'grass', 'fire', 'water', 'electric', 'bug', 'psychic', 'rock']
-
-async function getPokemon(url, signal) {
-  const response = await fetch(url, { signal })
-  if (!response.ok) throw new Error('Could not reach the PokéAPI. Please try again.')
-  return response.json()
-}
-
-function getPokemonArtwork(pokemon) {
-  return pokemon.sprites.other?.['official-artwork']?.front_default
-    || pokemon.sprites.other?.home?.front_default
-    || pokemon.sprites.front_default
-}
-
-function PokemonCard({ pokemon, onSelect, index }) {
-  const artwork = getPokemonArtwork(pokemon)
-
-  return (
-    <button
-      className={`pokemon-card ${pokemon.types[0].type.name} ${pokemon.id === 697 ? 'tyrantrum' : ''}`}
-      style={{ '--card-index': index }}
-      type="button"
-      onClick={() => onSelect(pokemon)}
-      aria-label={`View ${pokemon.name}, number ${pokemon.id}`}
-    >
-      <span className="card-number">{pokemon.id === 697 ? 'NO. 697 · T-REX FOSSIL' : `NO. ${String(pokemon.id).padStart(3, '0')}`}</span>
-      <span className="card-image-wrap">
-        {artwork && <img className="card-image" src={artwork} alt={pokemon.name} loading="lazy" />}
-      </span>
-      <span className="card-name-row">
-        <span className="pokemon-name">{pokemon.name.replaceAll('-', ' ')}</span>
-        <span className="hp-value">{pokemon.stats.find((stat) => stat.stat.name === 'hp')?.base_stat} HP</span>
-      </span>
-      <span className="card-types">
-        {pokemon.types.map(({ type }) => (
-          <span className={`type-pill ${type.name}`} key={type.name}>{type.name}</span>
-        ))}
-      </span>
-      <span className="card-rule" />
-      <span className="card-meta">
-        <span><b>{pokemon.height / 10} m</b><small>HEIGHT</small></span>
-        <span><b>{pokemon.weight / 10} kg</b><small>WEIGHT</small></span>
-        <span><b>{pokemon.stats.find((stat) => stat.stat.name === 'attack')?.base_stat}</b><small>ATTACK</small></span>
-      </span>
-    </button>
-  )
-}
-
-function PokemonDetails({ pokemon, onClose }) {
-  const [species, setSpecies] = useState(null)
-  const artwork = getPokemonArtwork(pokemon)
-  const flavorText = species?.flavor_text_entries.find((entry) => entry.language.name === 'en')?.flavor_text.replace(/[\n\f]/g, ' ')
-  const genus = species?.genera.find((entry) => entry.language.name === 'en')?.genus
-
-  useEffect(() => {
-    const controller = new AbortController()
-    getPokemon(pokemon.species.url, controller.signal)
-      .then(setSpecies)
-      .catch((error) => {
-        if (error.name !== 'AbortError') setSpecies(null)
-      })
-    return () => controller.abort()
-  }, [pokemon.id, pokemon.species?.url])
-
-  return (
-    <div className="dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className={`pokemon-dialog ${pokemon.types[0].type.name} ${pokemon.id === 25 ? 'pikachu' : ''}`} role="dialog" aria-modal="true" aria-labelledby="detail-name">
-        <button className="dialog-close" type="button" onClick={onClose} aria-label="Close details">×</button>
-        <div className="detail-topline">
-          <p className="dialog-kicker">POKÉDEX ENTRY <span>NO. {String(pokemon.id).padStart(3, '0')}</span></p>
-          {genus && <span className="dialog-genus">{genus}</span>}
-        </div>
-        <div className="dialog-hero">
-          <div className="dialog-artwork">
-            {artwork && <img src={artwork} alt={pokemon.name} />}
-            <span className="artwork-orbit" />
-          </div>
-          <div className="dialog-heading">
-            <h2 id="detail-name">{pokemon.name.replaceAll('-', ' ')}</h2>
-            <div className="card-types">
-              {pokemon.types.map(({ type }) => <span className={`type-pill ${type.name}`} key={type.name}>{type.name}</span>)}
-            </div>
-            <p className="dialog-ability">ABILITY <b>{pokemon.abilities[0]?.ability.name.replaceAll('-', ' ')}</b></p>
-          </div>
-        </div>
-        {flavorText && <p className="dialog-description">“{flavorText}”</p>}
-        <div className="detail-measurements">
-          <span><small>HEIGHT</small><b>{pokemon.height / 10} m</b></span>
-          <span><small>WEIGHT</small><b>{pokemon.weight / 10} kg</b></span>
-          <span><small>BASE EXP.</small><b>{pokemon.base_experience ?? '—'}</b></span>
-        </div>
-        <h3>Base stats <span>OUT OF 255</span></h3>
-        <div className="stat-list">
-          {pokemon.stats.map(({ base_stat, stat }, index) => (
-            <div className="stat-row" key={stat.name}>
-              <span>{stat.name.replaceAll('-', ' ')}</span><b>{base_stat}</b>
-              <span className="stat-track"><span style={{ '--stat-index': index, width: `${Math.min(base_stat / 255 * 100, 100)}%` }} /></span>
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
-  )
-}
-
-function App() {
-  const [pokemon, setPokemon] = useState([])
-  const [selectedPokemon, setSelectedPokemon] = useState(null)
-  const [selectedType, setSelectedType] = useState('all')
-  const [page, setPage] = useState(0)
-  const [search, setSearch] = useState('')
-  const [searchResult, setSearchResult] = useState(null)
-  const [searchError, setSearchError] = useState('')
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    const controller = new AbortController()
-    const loadPage = async () => {
-      setLoading(true)
-      setError('')
-      try {
-        const endpoint = selectedType === 'all'
-          ? `https://pokeapi.co/api/v2/pokemon?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`
-          : `https://pokeapi.co/api/v2/type/${selectedType}`
-        const listing = await getPokemon(endpoint, controller.signal)
-        const results = selectedType === 'all' ? listing.results : listing.pokemon.map(({ pokemon: item }) => item)
-        const visibleResults = selectedType === 'all'
-          ? results
-          : results.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
-        setTotal(selectedType === 'all' ? listing.count : results.length)
-        const entriesRequest = Promise.all(visibleResults.map(({ url }) => getPokemon(url, controller.signal)))
-        const tyrantrumRequest = selectedType === 'all' && page === 0
-          ? getPokemon('https://pokeapi.co/api/v2/pokemon/tyrantrum', controller.signal).catch((requestError) => {
-              if (requestError.name === 'AbortError') throw requestError
-              return null
-            })
-          : Promise.resolve(null)
-        const [entries, tyrantrum] = await Promise.all([entriesRequest, tyrantrumRequest])
-        const featuredEntries = selectedType === 'all' && page === 0
-          ? (tyrantrum ? [tyrantrum] : [])
-          : []
-        setPokemon([...entries, ...featuredEntries])
-      } catch (loadError) {
-        if (loadError.name !== 'AbortError') setError(loadError.message)
-      } finally {
-        if (!controller.signal.aborted) setLoading(false)
-      }
-    }
-    loadPage()
-    return () => controller.abort()
-  }, [page, selectedType])
-
-  const chooseType = (type) => {
-    setSelectedType(type)
-    setPage(0)
-    setSearchResult(null)
-    setSearchError('')
+const getInitialView = () => {
+  if (typeof window === 'undefined') {
+    return 'login';
   }
 
-  const searchPokemon = async (event) => {
-    event.preventDefault()
-    if (!search.trim()) return
-    const pokemonName = search.trim().toLowerCase().replace(/\s+/g, '-')
-    if (/^\d+$/.test(pokemonName)) {
-      setSearchResult(null)
-      setSearchError('Search using a Pokémon name.')
-      return
-    }
-    setSearchError('')
-    setSearchResult(null)
-    setLoading(true)
+  if (window.location.hash === '#register') {
+    return 'register';
+  }
+
+  if (window.location.hash === '#submit-grievance') {
+    return 'submit-grievance';
+  }
+
+  return window.location.hash === '#dashboard' ? 'dashboard' : 'login';
+};
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState('student');
+  const [email, setEmail] = useState('student.id@wmsu.edu.ph');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const [currentView, setCurrentView] = useState(getInitialView);
+  const [dashboardUser, setDashboardUser] = useState(null);
+  const [dashboardTab, setDashboardTab] = useState('Dashboard');
+  const [savedGrievanceState, setSavedGrievanceState] = useState(() => {
     try {
-      const result = await getPokemon(`https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(pokemonName)}`)
-      setSearchResult(result)
-    } catch {
-      setSearchError(`No Pokémon found for “${search.trim()}”. Try a Pokémon name.`)
-    } finally {
-      setLoading(false)
+      return { grievances: getGrievances(), error: '' };
+    } catch (error) {
+      return {
+        grievances: [],
+        error: error instanceof Error ? error.message : 'Unable to load saved grievances.',
+      };
     }
+  });
+
+  useEffect(() => {
+    const syncViewFromHash = () => {
+      setCurrentView(getInitialView());
+    };
+
+    syncViewFromHash();
+    window.addEventListener('hashchange', syncViewFromHash);
+
+    return () => window.removeEventListener('hashchange', syncViewFromHash);
+  }, []);
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (tab === 'student') {
+      setEmail('student.id@wmsu.edu.ph');
+    } else {
+      setEmail('faculty.id@wmsu.edu.ph');
+    }
+  };
+
+  const handleGoToRegister = () => {
+    setCurrentView('register');
+    window.location.hash = '#register';
+  };
+
+  const handleGoToLogin = () => {
+    setCurrentView('login');
+    window.location.hash = '#login';
+  };
+
+  const handleProfileComplete = (profile) => {
+    setDashboardUser(profile);
+    setCurrentView('dashboard');
+    window.location.hash = '#dashboard';
+  };
+
+  const handleOpenSubmitGrievance = () => {
+    setCurrentView('submit-grievance');
+    window.location.hash = '#submit-grievance';
+  };
+
+  const handleOpenMyGrievances = () => {
+    setDashboardTab('My Grievances');
+    setCurrentView('dashboard');
+    window.location.hash = '#dashboard';
+  };
+
+  const handleSaveGrievance = (formData) => {
+    const savedGrievance = saveGrievance(formData, dashboardUser ?? {});
+    setSavedGrievanceState((previousState) => ({
+      grievances: [savedGrievance, ...previousState.grievances],
+      error: '',
+    }));
+    return savedGrievance;
+  };
+
+  const handleGrievanceSubmitted = () => {
+    setDashboardTab('Dashboard');
+    setCurrentView('dashboard');
+    window.location.hash = '#dashboard';
+  };
+
+  const handleLogin = (event) => {
+    event.preventDefault();
+    setIsLoading(true);
+    setNotification(null);
+
+    setTimeout(() => {
+      setIsLoading(false);
+      setDashboardUser({
+        universityEmail: email,
+        fullName: email.split('@')[0].replace(/[._-]/g, ' '),
+        role: activeTab,
+      });
+      setCurrentView('dashboard');
+      window.location.hash = '#dashboard';
+    }, 1200);
+  };
+
+  if (currentView === 'register') {
+    return (
+      <Register
+        onBackToLogin={handleGoToLogin}
+        onComplete={handleProfileComplete}
+      />
+    );
   }
 
-  const pageCount = Math.ceil(total / PAGE_SIZE)
-  const shownPokemon = searchResult ? [searchResult] : pokemon
+  if (currentView === 'dashboard') {
+    return (
+      <Dashboard
+        user={dashboardUser}
+        grievances={savedGrievanceState.grievances}
+        grievanceError={savedGrievanceState.error}
+        onFileGrievance={handleOpenSubmitGrievance}
+        initialTab={dashboardTab}
+      />
+    );
+  }
+
+  if (currentView === 'submit-grievance') {
+    return (
+      <SubmitGrievance
+        user={dashboardUser}
+        onCancel={handleGrievanceSubmitted}
+        onSubmit={handleSaveGrievance}
+        onViewTickets={handleOpenMyGrievances}
+      />
+    );
+  }
 
   return (
-    <main className="pokedex">
-      <header className="site-header">
-        <h1>POKÉDEX</h1>
-      </header>
+    <div className="min-h-screen w-full bg-[#f3f4f6] flex items-center justify-center p-4 md:p-8 font-sans antialiased">
+      <div className="w-full max-w-[1080px] bg-white rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-[640px] border border-gray-100">
+        <div className="md:col-span-5 relative flex flex-col justify-end p-8 md:p-12 text-white overflow-hidden min-h-[340px] md:min-h-full">
+          <div
+            className="absolute inset-0 bg-cover bg-center transition-transform duration-700 hover:scale-105"
+            style={{
+              backgroundImage: `url('https://images.unsplash.com/photo-1541829070764-84a7d30dd3f3?q=80&w=1200&auto=format&fit=crop')`,
+            }}
+          />
 
-      <section className="catalogue" id="top">
-        <form className="search-form" onSubmit={searchPokemon} role="search">
-          <span className="search-icon" aria-hidden="true">⌕</span>
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search Pokémon by name..." aria-label="Search Pokémon by name" />
-          {searchResult && <button className="clear-search" type="button" onClick={() => { setSearchResult(null); setSearch(''); setSearchError('') }}>CLEAR</button>}
-          <button className="search-submit" type="submit" aria-label="Search">↗</button>
-        </form>
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/60 to-black/30" />
 
-        <div className="collection-label"><span className="collection-dot" /> {searchResult ? '1 RESULT' : `${String(total).padStart(3, '0')} POKÉMON`}</div>
+          <div className="relative z-10 space-y-4">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight">
+              Welcome Home,
+              <br />
+              <span className="text-[#00A3FF]">Normalite.</span>
+            </h1>
 
-        <div className="filter-row" aria-label="Filter by type">
-          <span className="filter-label">SORT BY TYPE</span>
-          {TYPES.map((type) => (
-            <button className={`filter-button ${selectedType === type ? 'active' : ''}`} key={type} type="button" aria-pressed={selectedType === type} onClick={() => chooseType(type)}>
-              {type !== 'all' && <span className={`filter-dot ${type}`} />}{type}
-            </button>
-          ))}
+            <p className="text-gray-200 text-xs sm:text-sm leading-relaxed max-w-md font-normal opacity-90">
+              Step back into the heart of the Crimson Frontier. Access your official campus grievance and student support portal, and stay connected with the WMSU community.
+            </p>
+          </div>
         </div>
 
-        {error && <div className="status-message" role="alert">{error} <button type="button" onClick={() => setPage((current) => current)}>Try again</button></div>}
-        {searchError && <div className="status-message" role="status">{searchError}</div>}
-        {loading ? (
-          <div className="loading-state" aria-live="polite"><span className="loading-mark" /> Loading Pokémon cards...</div>
-        ) : (
-          <>
-            <div className="grid" aria-live="polite">
-              {shownPokemon.map((entry, index) => <PokemonCard key={entry.id} pokemon={entry} index={index} onSelect={setSelectedPokemon} />)}
+        <div className="md:col-span-7 p-6 sm:p-10 md:p-12 flex flex-col justify-between bg-white">
+          <div className="max-w-md mx-auto w-full space-y-6">
+            <div className="space-y-1.5">
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+                Welcome to CampusCare
+              </h2>
+              <p className="text-xs sm:text-sm text-gray-500 leading-snug">
+                Sign in to track your grievances, submit new concerns, and access ombudsman support.
+              </p>
             </div>
-            {!searchResult && pageCount > 1 && (
-              <nav className="pagination" aria-label="Pokémon pages">
-                <button type="button" onClick={() => setPage((current) => current - 1)} disabled={page === 0}>← <span>PREVIOUS</span></button>
-                <span>PAGE <b>{String(page + 1).padStart(2, '0')}</b> <i>/</i> {String(pageCount).padStart(2, '0')}</span>
-                <button type="button" onClick={() => setPage((current) => current + 1)} disabled={page + 1 >= pageCount}><span>NEXT</span> →</button>
-              </nav>
-            )}
-          </>
-        )}
-      </section>
-      <footer className="site-footer"><span>POKÉMON CARDS <b>·</b> DATA BY POKÉAPI</span><span>SEARCH BY NAME</span></footer>
-      {selectedPokemon && <PokemonDetails pokemon={selectedPokemon} onClose={() => setSelectedPokemon(null)} />}
-    </main>
-  )
-}
 
-export default App
+            {notification && (
+              <div
+                role="status"
+                aria-live="polite"
+                className={`p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
+                  notification.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200'
+                }`}
+              >
+                <CheckCircle2 aria-hidden="true" className="w-4 h-4 shrink-0" />
+                <span>{notification.message}</span>
+              </div>
+            )}
+
+            <div className="p-1 bg-slate-100 rounded-xl flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handleTabChange('student')}
+                className={`flex-1 py-2 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
+                  activeTab === 'student' ? 'bg-white text-[#800020] shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                <GraduationCap className={`w-4 h-4 ${activeTab === 'student' ? 'text-[#800020]' : 'text-gray-400'}`} />
+                <span>Student Portal</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTabChange('faculty')}
+                className={`flex-1 py-2 px-3 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
+                  activeTab === 'faculty' ? 'bg-white text-[#800020] shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                <Building2 className={`w-4 h-4 ${activeTab === 'faculty' ? 'text-[#800020]' : 'text-gray-400'}`} />
+                <span>Faculty & Staff SSO</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleLogin} className="space-y-4 pt-1">
+              <div className="space-y-1">
+                <label htmlFor="campus-email" className="text-[10px] font-bold tracking-wider text-gray-500 uppercase">
+                  UNIVERSITY EMAIL ADDRESS
+                </label>
+                <div className="relative">
+                  <input
+                    id="campus-email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="student.id@wmsu.edu.ph"
+                    className="w-full px-3.5 py-2.5 sm:py-3 bg-white text-slate-900 font-semibold text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#800020]/20 focus:border-[#800020] transition-all placeholder:text-gray-400"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <label htmlFor="campus-password" className="text-[10px] font-bold tracking-wider text-gray-500 uppercase">
+                    PASSWORD
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((current) => !current)}
+                    aria-controls="campus-password"
+                    aria-pressed={showPassword}
+                    className="text-xs text-slate-500 hover:text-slate-800 font-medium flex items-center gap-1.5 transition-colors focus:outline-none"
+                  >
+                    <span>{showPassword ? 'Hide' : 'Show'}</span>
+                    {showPassword ? (
+                      <EyeOff className="w-3.5 h-3.5 text-gray-500" />
+                    ) : (
+                      <Eye className="w-3.5 h-3.5 text-gray-500" />
+                    )}
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <input
+                    id="campus-password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full px-3.5 py-2.5 sm:py-3 bg-white text-slate-900 font-semibold text-sm rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#800020]/20 focus:border-[#800020] transition-all placeholder:text-gray-400"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <a href="#forgot-password" className="text-xs font-semibold text-[#800020] hover:underline">
+                  Forgot password?
+                </a>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(event) => setRememberMe(event.target.checked)}
+                    className="accent-[#800020]"
+                  />
+                  <span className="text-xs text-gray-600 font-medium">Remember me</span>
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 px-4 bg-[#800020] hover:bg-[#66001a] text-white font-semibold rounded-xl text-sm shadow-md hover:shadow-lg active:scale-[0.99] transition-all duration-150 flex items-center justify-center gap-2 disabled:opacity-70 mt-2"
+              >
+                {isLoading ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <span>Log in</span>
+                )}
+              </button>
+            </form>
+
+            <div className="relative flex items-center justify-center my-4">
+              <div className="border-t border-gray-200 w-full" />
+              <span className="bg-white px-3 text-[11px] font-semibold tracking-wider text-gray-400 uppercase absolute">
+                OR
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setNotification({
+                  type: 'success',
+                  message: 'Redirecting to WMSU Google SSO...',
+                });
+              }}
+              className="w-full py-2.5 sm:py-3 px-4 bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 text-gray-700 font-semibold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all active:scale-[0.99]"
+            >
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+              </svg>
+              <span>Continue with WMSU Google Account</span>
+            </button>
+
+            <p className="text-center text-xs text-gray-500 font-normal pt-1">
+              Don't have an active tracking ID?{' '}
+              <button type="button" onClick={handleGoToRegister} className="font-semibold text-[#800020] hover:underline">
+                Register account
+              </button>
+            </p>
+          </div>
+
+          <div className="pt-6 mt-6 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between text-[11px] text-gray-400 gap-2">
+            <span>© Western Mindanao State University</span>
+            <a href="#privacy" className="hover:text-gray-600 transition-colors">
+              Data Privacy (RA 10173)
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
